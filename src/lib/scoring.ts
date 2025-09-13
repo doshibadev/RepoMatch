@@ -26,6 +26,12 @@ interface RepositoryScore {
     documentationScore: number;
     issueScore: number;
     contributorScore: number;
+    // Enhanced breakdown
+    commitActivityScore: number;
+    issueResponseScore: number;
+    dependencyHealthScore: number;
+    readmeQualityScore: number;
+    skillMatchScore: number;
   };
 }
 
@@ -114,7 +120,13 @@ class RepositoryScorer {
         activityScore: this.calculateActivityScore(repo),
         documentationScore: this.calculateDocumentationScore(repo),
         issueScore: this.calculateIssueScore(repo),
-        contributorScore: this.calculateContributorScore(repo)
+        contributorScore: this.calculateContributorScore(repo),
+        // Enhanced breakdown using enriched data
+        commitActivityScore: this.calculateCommitActivityScore(repo),
+        issueResponseScore: this.calculateIssueResponseScore(repo),
+        dependencyHealthScore: this.calculateDependencyHealthScore(repo),
+        readmeQualityScore: this.calculateReadmeQualityScore(repo),
+        skillMatchScore: this.calculateSkillMatchScore(repo, skills)
       }
     };
   }
@@ -128,22 +140,24 @@ class RepositoryScorer {
     const languageMatch = this.calculateLanguageMatch(repo, skills);
     const topicMatch = this.calculateTopicMatch(repo, skills);
     const readmeMatch = this.calculateReadmeMatch(repo, skills);
+    const skillMatchScore = this.calculateSkillMatchScore(repo, skills);
 
     // Mode-specific weighting for relevance factors
-    let weights = { language: 0.4, topic: 0.4, readme: 0.2 };
+    let weights = { language: 0.3, topic: 0.3, readme: 0.2, skillMatch: 0.2 };
     
     if (options.mode === 'learning') {
       // Learning mode: More flexible matching, focus on educational content
-      weights = { language: 0.3, topic: 0.5, readme: 0.2 };
+      weights = { language: 0.2, topic: 0.4, readme: 0.2, skillMatch: 0.2 };
     } else if (options.mode === 'quick-wins') {
       // Quick wins: Less strict matching, focus on broad appeal
-      weights = { language: 0.2, topic: 0.3, readme: 0.5 };
+      weights = { language: 0.2, topic: 0.2, readme: 0.3, skillMatch: 0.3 };
     }
 
     return (
       languageMatch * weights.language +
       topicMatch * weights.topic +
-      readmeMatch * weights.readme
+      readmeMatch * weights.readme +
+      skillMatchScore * weights.skillMatch
     );
   }
 
@@ -156,25 +170,31 @@ class RepositoryScorer {
     const starsScore = this.calculateStarsScore(repo.stargazers_count);
     const activityScore = this.calculateActivityScore(repo);
     const documentationScore = this.calculateDocumentationScore(repo);
+    const commitActivityScore = this.calculateCommitActivityScore(repo);
+    const dependencyHealthScore = this.calculateDependencyHealthScore(repo);
+    const readmeQualityScore = this.calculateReadmeQualityScore(repo);
 
     // Mode-specific weighting for quality factors
-    let weights = { stars: 0.5, activity: 0.3, documentation: 0.2 };
+    let weights = { stars: 0.3, activity: 0.2, documentation: 0.15, commitActivity: 0.15, dependencyHealth: 0.1, readmeQuality: 0.1 };
     
     if (options.mode === 'learning') {
-      // Learning mode: Prioritize documentation and community (stars)
-      weights = { stars: 0.4, activity: 0.2, documentation: 0.4 };
+      // Learning mode: Prioritize documentation and README quality
+      weights = { stars: 0.25, activity: 0.15, documentation: 0.25, commitActivity: 0.15, dependencyHealth: 0.1, readmeQuality: 0.1 };
     } else if (options.mode === 'quick-wins') {
       // Quick wins: Prioritize activity and stars (popularity)
-      weights = { stars: 0.6, activity: 0.3, documentation: 0.1 };
+      weights = { stars: 0.4, activity: 0.25, documentation: 0.1, commitActivity: 0.15, dependencyHealth: 0.05, readmeQuality: 0.05 };
     } else if (options.mode === 'profile-building') {
-      // Profile building: Balanced approach with slight emphasis on stars
-      weights = { stars: 0.5, activity: 0.3, documentation: 0.2 };
+      // Profile building: Balanced approach with emphasis on stars and dependency health
+      weights = { stars: 0.3, activity: 0.2, documentation: 0.15, commitActivity: 0.15, dependencyHealth: 0.1, readmeQuality: 0.1 };
     }
 
     let qualityScore = (
       starsScore * weights.stars +
       activityScore * weights.activity +
-      documentationScore * weights.documentation
+      documentationScore * weights.documentation +
+      commitActivityScore * weights.commitActivity +
+      dependencyHealthScore * weights.dependencyHealth +
+      readmeQualityScore * weights.readmeQuality
     );
 
     // Boost for repos with some community validation (50-500 stars = sweet spot)
@@ -198,24 +218,26 @@ class RepositoryScorer {
   private calculateOpportunityScore(repo: RepositoryDetails, options: ScoringOptions): number {
     const issueScore = this.calculateIssueScore(repo);
     const contributorScore = this.calculateContributorScore(repo);
+    const issueResponseScore = this.calculateIssueResponseScore(repo);
 
     // Mode-specific weighting for opportunity factors
-    let weights = { issues: 0.6, contributors: 0.4 };
+    let weights = { issues: 0.5, contributors: 0.3, response: 0.2 };
     
     if (options.mode === 'learning') {
       // Learning mode: Focus on good first issues and community
-      weights = { issues: 0.7, contributors: 0.3 };
+      weights = { issues: 0.6, contributors: 0.2, response: 0.2 };
     } else if (options.mode === 'quick-wins') {
-      // Quick wins: Focus heavily on issues (contribution opportunities)
-      weights = { issues: 0.8, contributors: 0.2 };
+      // Quick wins: Focus heavily on issues and response time
+      weights = { issues: 0.6, contributors: 0.1, response: 0.3 };
     } else if (options.mode === 'profile-building') {
       // Profile building: Balanced approach
-      weights = { issues: 0.6, contributors: 0.4 };
+      weights = { issues: 0.5, contributors: 0.3, response: 0.2 };
     }
 
     return (
       issueScore * weights.issues +
-      contributorScore * weights.contributors
+      contributorScore * weights.contributors +
+      issueResponseScore * weights.response
     );
   }
 
@@ -798,6 +820,134 @@ class RepositoryScorer {
     }
 
     return explanations.join(', ') || 'Standard repository metrics';
+  }
+
+  /**
+   * Calculate commit activity score using enriched data
+   */
+  private calculateCommitActivityScore(repo: RepositoryDetails): number {
+    if (!repo.enrichedData?.commitAnalysis) return 0;
+
+    const { frequency, recency, contributorDistribution, commitMessageQuality, branchActivity } = repo.enrichedData.commitAnalysis;
+    
+    // Normalize frequency (0-10 commits per week -> 0-1 score)
+    const frequencyScore = Math.min(frequency / 5, 1); // 5 commits/week = perfect score
+    
+    // Normalize recency (0-365 days -> 1-0 score, inverted)
+    const recencyScore = Math.max(0, 1 - (recency / 30)); // 30 days = 0 score
+    
+    // Combine all factors
+    const activityScore = (
+      frequencyScore * 0.3 +
+      recencyScore * 0.3 +
+      contributorDistribution * 0.2 +
+      commitMessageQuality * 0.1 +
+      branchActivity * 0.1
+    );
+    
+    return Math.min(activityScore, 1);
+  }
+
+  /**
+   * Calculate issue response score using enriched data
+   */
+  private calculateIssueResponseScore(repo: RepositoryDetails): number {
+    if (!repo.enrichedData?.issueAnalysis) return 0;
+
+    const { responseTime, resolutionRate, maintainerActivity, communityEngagement, issueQuality, labelUsage } = repo.enrichedData.issueAnalysis;
+    
+    // Normalize response time (0-168 hours -> 1-0 score, inverted)
+    const responseScore = Math.max(0, 1 - (responseTime / 24)); // 24 hours = 0 score
+    
+    // Combine all factors
+    const responseQualityScore = (
+      responseScore * 0.3 +
+      resolutionRate * 0.25 +
+      maintainerActivity * 0.2 +
+      communityEngagement * 0.15 +
+      issueQuality * 0.05 +
+      labelUsage * 0.05
+    );
+    
+    return Math.min(responseQualityScore, 1);
+  }
+
+  /**
+   * Calculate dependency health score using enriched data
+   */
+  private calculateDependencyHealthScore(repo: RepositoryDetails): number {
+    if (!repo.enrichedData?.dependencyAnalysis) return 0;
+
+    const { healthScore, securityScore, updateFrequency, dependencyCount, outdatedDependencies, licenseCompatibility } = repo.enrichedData.dependencyAnalysis;
+    
+    // Calculate outdated ratio
+    const outdatedRatio = dependencyCount > 0 ? outdatedDependencies / dependencyCount : 0;
+    const outdatedScore = Math.max(0, 1 - outdatedRatio); // Lower outdated ratio = better score
+    
+    // Combine all factors
+    const dependencyScore = (
+      healthScore * 0.3 +
+      securityScore * 0.25 +
+      updateFrequency * 0.15 +
+      outdatedScore * 0.2 +
+      licenseCompatibility * 0.1
+    );
+    
+    return Math.min(dependencyScore, 1);
+  }
+
+  /**
+   * Calculate README quality score using enriched data
+   */
+  private calculateReadmeQualityScore(repo: RepositoryDetails): number {
+    if (!repo.enrichedData?.readmeAnalysis) return 0;
+
+    const { contentQuality, learningResources, setupDifficulty } = repo.enrichedData.readmeAnalysis;
+    
+    // Normalize learning resources (0-10 -> 0-1 score)
+    const learningScore = Math.min(learningResources / 5, 1); // 5 resources = perfect score
+    
+    // Invert setup difficulty (easier setup = better score)
+    const setupScore = Math.max(0, 1 - setupDifficulty);
+    
+    // Combine all factors
+    const readmeScore = (
+      contentQuality * 0.5 +
+      learningScore * 0.3 +
+      setupScore * 0.2
+    );
+    
+    return Math.min(readmeScore, 1);
+  }
+
+  /**
+   * Calculate skill match score using enriched data
+   */
+  private calculateSkillMatchScore(repo: RepositoryDetails, skills: NormalizedSkill[]): number {
+    if (!repo.enrichedData?.readmeAnalysis?.skillKeywords || !skills.length) return 0;
+
+    const readmeSkills = repo.enrichedData.readmeAnalysis.skillKeywords;
+    const userSkills = skills.map(skill => skill.normalized.toLowerCase());
+    const userExpandedSkills = skills.flatMap(skill => skill.expanded.map(s => s.toLowerCase()));
+    
+    let matches = 0;
+    let totalSkills = userSkills.length;
+    
+    // Check direct matches
+    for (const skill of userSkills) {
+      if (readmeSkills.some(readmeSkill => readmeSkill.toLowerCase().includes(skill) || skill.includes(readmeSkill.toLowerCase()))) {
+        matches += 1;
+      }
+    }
+    
+    // Check expanded skill matches
+    for (const expandedSkill of userExpandedSkills) {
+      if (readmeSkills.some(readmeSkill => readmeSkill.toLowerCase().includes(expandedSkill) || expandedSkill.includes(readmeSkill.toLowerCase()))) {
+        matches += 0.5; // Half weight for expanded matches
+      }
+    }
+    
+    return totalSkills > 0 ? Math.min(matches / totalSkills, 1) : 0;
   }
 }
 

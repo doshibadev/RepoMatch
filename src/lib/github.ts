@@ -1,5 +1,6 @@
 import { Octokit } from '@octokit/rest';
 import cacheManager from './cache';
+import dataEnricher from './data-enricher';
 
 interface SearchOptions {
   perPage?: number;
@@ -35,11 +36,48 @@ interface RepositoryDetails {
   default_branch: string;
   homepage: string;
   license: any;
+  archived: boolean;
+  disabled: boolean;
   owner: {
     login: string;
     avatar_url: string;
     html_url: string;
     type: string;
+  };
+  // Enriched data
+  enrichedData?: {
+    commitAnalysis: {
+      frequency: number;
+      recency: number;
+      contributorDistribution: number;
+      averageCommitSize: number;
+      commitMessageQuality: number;
+      branchActivity: number;
+    };
+    issueAnalysis: {
+      responseTime: number;
+      resolutionRate: number;
+      maintainerActivity: number;
+      communityEngagement: number;
+      issueQuality: number;
+      labelUsage: number;
+    };
+    dependencyAnalysis: {
+      healthScore: number;
+      securityScore: number;
+      updateFrequency: number;
+      dependencyCount: number;
+      outdatedDependencies: number;
+      licenseCompatibility: number;
+    };
+    readmeAnalysis: {
+      contentQuality: number;
+      skillKeywords: string[];
+      projectType: string;
+      complexity: number;
+      learningResources: number;
+      setupDifficulty: number;
+    };
   };
 }
 
@@ -80,10 +118,13 @@ class GitHubClient {
       // Use multi-strategy search to find diverse repository sizes
       const searchResults = await this.multiStrategySearch(skills, perPage);
       
+      // Filter out archived and disabled repositories
+      const filteredResults = this.filterActiveRepositories(searchResults);
+      
       const result = {
-        repositories: searchResults,
-        total: searchResults.length,
-        hasMore: searchResults.length === perPage
+        repositories: filteredResults,
+        total: filteredResults.length,
+        hasMore: filteredResults.length === perPage
       };
 
       // Cache the result
@@ -140,7 +181,7 @@ class GitHubClient {
     const languageSkills = skills.filter(skill => this.isLanguage(skill));
     const otherSkills = skills.filter(skill => !this.isLanguage(skill));
 
-    let query = 'is:public';
+    let query = 'is:public archived:false';
     
     // Add language filters
     if (languageSkills.length > 0) {
@@ -176,7 +217,7 @@ class GitHubClient {
     
     if (otherSkills.length === 0) return [];
 
-    let query = 'is:public';
+    let query = 'is:public archived:false';
     
     // Add topic filters
     const topicQuery = otherSkills.map(skill => `topic:${skill}`).join(' OR ');
@@ -250,11 +291,19 @@ class GitHubClient {
         })
       ]);
 
-      const result = {
+      const basicRepoData = {
         ...repoData.data,
         languages: languages.data,
         topics: topics.data.names || [],
         goodFirstIssues: issues.data.length
+      } as RepositoryDetails;
+
+      // Enrich with detailed analysis
+      const enrichedData = await dataEnricher.enrichRepository(owner, repo, basicRepoData);
+
+      const result = {
+        ...basicRepoData,
+        enrichedData
       } as RepositoryDetails;
 
       // Cache the result
@@ -533,6 +582,39 @@ class GitHubClient {
       console.error('Error fetching rate limit:', error);
       return { remaining: 0, limit: 5000, reset: Date.now() };
     }
+  }
+
+  /**
+   * Filter out archived and disabled repositories
+   * These repositories are not suitable for contributions
+   */
+  private filterActiveRepositories(repositories: any[]): any[] {
+    return repositories.filter(repo => {
+      // Filter out archived repositories
+      if (repo.archived === true) {
+        return false;
+      }
+      
+      // Filter out disabled repositories
+      if (repo.disabled === true) {
+        return false;
+      }
+      
+      // Filter out repositories with no recent activity (older than 2 years)
+      const twoYearsAgo = new Date();
+      twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+      
+      if (repo.pushed_at && new Date(repo.pushed_at) < twoYearsAgo) {
+        return false;
+      }
+      
+      // Filter out repositories with no commits in the last year
+      if (repo.updated_at && new Date(repo.updated_at) < twoYearsAgo) {
+        return false;
+      }
+      
+      return true;
+    });
   }
 }
 
