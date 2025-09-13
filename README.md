@@ -6,7 +6,7 @@ A smart platform that matches developers with GitHub repositories perfect for th
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Tech Stack](https://img.shields.io/badge/Next.js-React-61DAFB)
-![API](https://img.shields.io/badge/GitHub-GraphQL-181717)
+![API](https://img.shields.io/badge/GitHub-Octokit-181717)
 ![Deployment](https://img.shields.io/badge/deploy-Vercel-000000)
 
 ## ✨ Key Features
@@ -51,7 +51,7 @@ Beyond basic issue labels, we analyze:
 ```mermaid
 graph TD
     A[User Input: Skills] --> B[Skill Normalization]
-    B --> C[GitHub GraphQL Search]
+    B --> C[GitHub Octokit Search]
     C --> D[Multi-Dimensional Scoring]
     D --> E[Intelligent Ranking]
     E --> F[Results Display]
@@ -64,7 +64,7 @@ graph TD
 ### The Process
 
 1. **Skill Processing**: Your input skills are expanded using our semantic skill graph
-2. **Smart Search**: Batched GitHub GraphQL queries fetch repository metadata
+2. **Smart Search**: Batched GitHub Octokit API calls fetch repository metadata
 3. **Scoring Engine**: Each repo gets scored across relevance, quality, and opportunity dimensions
 4. **Intelligent Ranking**: Results are ranked or randomly weighted based on your preference
 5. **Fresh Results**: Real-time scoring ensures you always get current opportunities
@@ -78,7 +78,7 @@ graph TD
 | **Backend** | Next.js API Routes | Serverless functions, same codebase as frontend |
 | **Database** | Supabase (PostgreSQL) | Real-time capabilities, built-in auth, easy scaling |
 | **Caching** | Redis (Upstash) | Fast data retrieval, session management |
-| **API** | GitHub GraphQL | Efficient data fetching, rich repository metadata |
+| **API** | GitHub Octokit | Efficient REST API client, rich repository metadata |
 | **Deployment** | Vercel | Seamless Next.js deployment, global CDN |
 | **Icons** | Lucide React | Consistent, beautiful icons |
 
@@ -147,7 +147,7 @@ Visit `http://localhost:3000` to see your application running.
 │   │   ├── index.js        # Home page
 │   │   └── results.js      # Results page
 │   ├── lib/
-│   │   ├── github.js       # GitHub API client
+│   │   ├── github.js       # GitHub Octokit client
 │   │   ├── scoring.js      # Repository scoring algorithms
 │   │   ├── cache.js        # Caching utilities
 │   │   └── skills.js       # Skill normalization
@@ -163,14 +163,22 @@ Visit `http://localhost:3000` to see your application running.
 ## 🔧 API Endpoints
 
 ### `POST /api/search`
-Search for repositories based on skills.
+Search for repositories based on skills with advanced filtering options.
+
+#### Parameters
+- **skills**: Array of skill names (required)
+- **mode**: "profile-building", "learning", or "quick-wins"
+- **limit**: Number of results (1-50, default: 20)
+- **starRange**: Filter by repository size (min/max stars)
+- **feelingLucky**: Return random high-quality matches
 
 ```javascript
 // Request
 {
-  "skills": ["react", "typescript", "tailwind"],
+  "skills": ["react", "typescript", "javascript"],
   "mode": "profile-building", // or "learning" or "quick-wins"
-  "limit": 20
+  "limit": 20,
+  "starRange": { "min": 100, "max": 5000 }
 }
 
 // Response
@@ -264,7 +272,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- GitHub for their excellent GraphQL API
+- GitHub for their excellent REST API and Octokit library
 - The open-source community for inspiration
 - All contributors who help make this project better
 
